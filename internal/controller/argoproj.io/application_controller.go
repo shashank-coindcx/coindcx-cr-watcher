@@ -47,9 +47,20 @@ type ApplicationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
-	// TODO(user): your logic here
+	var app argoprojiov1alpha1.Application
+	if err := r.Client.Get(ctx, req.NamespacedName, &app); err != nil {
+		logger.Error(err, "unable to fetch Application", "name", req.Name, "namespace", req.Namespace)
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	logger.Info("Reconcile called for Application",
+		"name", app.Name,
+		"namespace", app.Namespace, "destination", app.Spec.Destination.Name,
+		"source", app.Spec.Source.RepoURL,
+		"status", app.Status.Sync.Status)
 
 	return ctrl.Result{}, nil
 }
