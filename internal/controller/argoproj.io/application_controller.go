@@ -18,7 +18,9 @@ package argoprojio
 
 import (
 	"context"
+	"encoding/json"
 
+	kafka "github.com/IBM/sarama"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,10 +29,45 @@ import (
 	argoprojiov1alpha1 "github.com/shashank-coindcx/coindcx-cr-watcher/api/argoproj.io/v1alpha1"
 )
 
+type KafkaMesage struct {
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	Destination string `json:"destination"`
+	Source      string `json:"source"`
+	Status      string `json:"status"`
+}
+
+func (r *ApplicationReconciler) sendKafkaMessage(app *argoprojiov1alpha1.Application) error {
+	logger := logf.FromContext(context.Background())
+	message := KafkaMesage{
+		Name:        app.Name,
+		Namespace:   app.Namespace,
+		Destination: app.Spec.Destination.Name,
+		Source:      app.Spec.Source.RepoURL,
+		Status:      app.Status.Sync.Status,
+	}
+
+	data, _ := json.Marshal(message)
+
+	msg := &kafka.ProducerMessage{
+		Topic: "external-secret-events",
+		Value: kafka.StringEncoder(data),
+	}
+
+	if _, _, err := r.Producer.SendMessage(msg); err != nil {
+		return err
+	}
+
+	logger.Info("Message sent to Kafka", "message", message)
+
+	return nil
+}
+
 // ApplicationReconciler reconciles a Application object
 type ApplicationReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Producer kafka.SyncProducer
 }
 
 // +kubebuilder:rbac:groups=argoproj.io.internal.coindcx.com,resources=applications,verbs=get;list;watch;create;update;patch;delete
@@ -61,6 +98,11 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		"namespace", app.Namespace, "destination", app.Spec.Destination.Name,
 		"source", app.Spec.Source.RepoURL,
 		"status", app.Status.Sync.Status)
+
+	if err := r.sendKafkaMessage(&app); err != nil {
+		logger.Error(err, "Failed to send message to Kafka", "application", app.Name)
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }

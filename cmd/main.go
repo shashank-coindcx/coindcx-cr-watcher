@@ -26,6 +26,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	kafka "github.com/IBM/sarama"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -202,9 +203,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// setup kafka producer
+	producer, err := setupKafkaProducer()
+	if err != nil {
+		setupLog.Error(err, "unable to create Kafka producer")
+		os.Exit(1)
+	}
+
+	defer producer.Close()
+
 	if err := (&argoprojiocontroller.ApplicationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Producer: producer,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Application")
 		os.Exit(1)
@@ -241,4 +252,18 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func setupKafkaProducer() (kafka.SyncProducer, error) {
+	config := kafka.NewConfig()
+	config.Producer.Return.Successes = true
+	config.Producer.RequiredAcks = kafka.WaitForAll
+	//config.Net.TLS.Enable = true
+
+	producer, err := kafka.NewSyncProducer([]string{"localhost:9092"}, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return producer, nil
 }
