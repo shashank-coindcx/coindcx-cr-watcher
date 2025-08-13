@@ -64,6 +64,7 @@ type ApplicationStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:skip
 
 // Application is the Schema for the applications API
 type Application struct {
@@ -83,6 +84,7 @@ type Application struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:skip
 
 // ApplicationList contains a list of Application
 type ApplicationList struct {
