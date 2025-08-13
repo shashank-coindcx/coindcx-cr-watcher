@@ -9,4 +9,14 @@ layout:
 multigroup: true
 projectName: coindcx-cr-watcher
 repo: github.com/shashank-coindcx/coindcx-cr-watcher
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: internal.coindcx.com
+  group: argoproj.io
+  kind: Application
+  path: github.com/shashank-coindcx/coindcx-cr-watcher/api/argoproj.io/v1alpha1
+  version: v1alpha1
 version: "3"
