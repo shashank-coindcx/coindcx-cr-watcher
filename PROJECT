@@ -19,4 +19,8 @@ resources:
   kind: Application
   path: github.com/shashank-coindcx/coindcx-cr-watcher/api/argoproj.io/v1alpha1
   version: v1alpha1
+- controller: true
+  group: external-secrets.io
+  kind: ExternalSecret
+  version: v1
 version: "3"

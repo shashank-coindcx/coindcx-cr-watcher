@@ -14,80 +14,74 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package argoprojio
+package externalsecretsio
 
 import (
 	"context"
 	"github.com/shashank-coindcx/coindcx-cr-watcher/internal/utils"
 
+	externalsecretsv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	argoprojiov1alpha1 "github.com/shashank-coindcx/coindcx-cr-watcher/api/argoproj.io/v1alpha1"
 )
 
 const (
 	kafkaTopic = "external-secret-events"
-	cr         = "argoproj.io/applications"
+	cr         = "external-secrets.io/externalsecrets"
 )
 
-type KafkaMesage struct {
-	Destination string `json:"destination"`
-	Source      string `json:"source"`
-}
-
-// ApplicationReconciler reconciles a Application object
-type ApplicationReconciler struct {
+// ExternalSecretReconciler reconciles a ExternalSecret object
+type ExternalSecretReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Kafka  *utils.Kafka
 }
 
-// +kubebuilder:rbac:groups=argoproj.io.internal.coindcx.com,resources=applications,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=argoproj.io.internal.coindcx.com,resources=applications/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=argoproj.io.internal.coindcx.com,resources=applications/finalizers,verbs=update
+// +kubebuilder:rbac:groups=external-secrets.io,resources=externalsecrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=external-secrets.io,resources=externalsecrets/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=external-secrets.io,resources=externalsecrets/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the Application object against the actual cluster state, and then
+// the ExternalSecret object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
-func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ExternalSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
 
-	var app argoprojiov1alpha1.Application
-	if err := r.Client.Get(ctx, req.NamespacedName, &app); err != nil {
-		logger.Error(err, "unable to fetch Application", "name", req.Name, "namespace", req.Namespace)
+	var es externalsecretsv1.ExternalSecret
+	if err := r.Client.Get(ctx, req.NamespacedName, &es); err != nil {
+		logger.Error(err, "unable to fetch ExternalSecret", "name", req.Name, "namespace", req.Namespace)
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	logger.Info("Reconcile called for Application",
-		"name", app.Name,
-		"cr", cr,
-		"namespace", app.Namespace, "destination", app.Spec.Destination.Name,
-		"source", app.Spec.Source.RepoURL,
-		"status", app.Status.Sync.Status)
+	var status string
+
+	for _, cond := range es.Status.Conditions {
+		status = string(cond.Message)
+	}
+
+	logger.Info("Reconcile called for ExternalSecret",
+		"name", es.Name,
+		"namespace", es.Namespace,
+		"status", status)
 
 	message := utils.KafkaMesage{
-		Name:      app.Name,
+		Name:      es.Name,
 		CR:        cr,
-		Namespace: app.Namespace,
-		Meta: KafkaMesage{
-			Destination: app.Spec.Destination.Name,
-			Source:      app.Spec.Source.RepoURL,
-		},
-		Status: app.Status.Sync.Status,
+		Namespace: es.Namespace,
+		Status:    status,
 	}
 
 	if err := r.Kafka.SendKafkaMessage(kafkaTopic, &message, &logger); err != nil {
-		logger.Error(err, "Failed to send message to Kafka", "application", app.Name)
+		logger.Error(err, "Failed to send message to Kafka", "externalsecret", es.Name)
 		return ctrl.Result{}, err
 	}
 
@@ -95,9 +89,9 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ExternalSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&argoprojiov1alpha1.Application{}).
-		Named("argoproj.io-application").
+		For(&externalsecretsv1.ExternalSecret{}).
+		Named("external-secrets.io-externalsecret").
 		Complete(r)
 }

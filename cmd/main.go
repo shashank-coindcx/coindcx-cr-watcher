@@ -19,9 +19,11 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"github.com/shashank-coindcx/coindcx-cr-watcher/internal/utils"
+	externalsecretsv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	"os"
 	"path/filepath"
+
+	"github.com/shashank-coindcx/coindcx-cr-watcher/internal/utils"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -41,6 +43,7 @@ import (
 
 	argoprojiov1alpha1 "github.com/shashank-coindcx/coindcx-cr-watcher/api/argoproj.io/v1alpha1"
 	argoprojiocontroller "github.com/shashank-coindcx/coindcx-cr-watcher/internal/controller/argoproj.io"
+	externalsecretsiocontroller "github.com/shashank-coindcx/coindcx-cr-watcher/internal/controller/external-secrets.io"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -54,6 +57,8 @@ func init() {
 
 	utilruntime.Must(argoprojiov1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
+
+	utilruntime.Must(externalsecretsv1.AddToScheme(scheme))
 }
 
 // nolint:gocyclo
@@ -213,12 +218,22 @@ func main() {
 
 	defer producer.Close()
 
+	kafka := utils.NewKafka(producer)
+
 	if err := (&argoprojiocontroller.ApplicationReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Kafka:  utils.NewKafka(producer),
+		Kafka:  kafka,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Application")
+		os.Exit(1)
+	}
+	if err := (&externalsecretsiocontroller.ExternalSecretReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Kafka:  kafka,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ExternalSecret")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

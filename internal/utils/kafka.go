@@ -7,6 +7,14 @@ import (
 	"github.com/go-logr/logr"
 )
 
+type KafkaMesage struct {
+	Name      string `json:"name"`
+	CR        string `json:"cr"`
+	Namespace string `json:"namespace"`
+	Meta      any    `json:"meta,omitempty,omitzero"`
+	Status    string `json:"status"`
+}
+
 type Kafka struct {
 	producer kafka.SyncProducer
 }
@@ -15,7 +23,7 @@ func NewKafka(producer kafka.SyncProducer) *Kafka {
 	return &Kafka{producer: producer}
 }
 
-func (k *Kafka) SendKafkaMessage(topic string, message any, logger *logr.Logger) error {
+func (k *Kafka) SendKafkaMessage(topic string, message *KafkaMesage, logger *logr.Logger) error {
 	data, _ := json.Marshal(message)
 
 	msg := &kafka.ProducerMessage{
