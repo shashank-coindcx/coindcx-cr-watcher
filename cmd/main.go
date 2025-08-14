@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"github.com/shashank-coindcx/coindcx-cr-watcher/internal/utils"
 	"os"
 	"path/filepath"
 
@@ -213,9 +214,9 @@ func main() {
 	defer producer.Close()
 
 	if err := (&argoprojiocontroller.ApplicationReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Producer: producer,
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Kafka:  utils.NewKafka(producer),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Application")
 		os.Exit(1)
